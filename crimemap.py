@@ -10,9 +10,24 @@ from bokeh.io import output_notebook, show, curdoc
 from bokeh.models import Select, ColumnDataSource, FactorRange, DataRange1d
 from bokeh.layouts import gridplot, column, row
 from bokeh.events import Tap
+from bokeh.models import ColorBar
 
 import warnings
 import logging
+
+from bokeh.transform import linear_cmap
+from bokeh.palettes import Spectral6, RdBu6, Magma256
+
+import sys
+from bokeh.models.widgets import Button
+
+customCMap = ['#00BFFF','#1E90FF','#fecc5c','#fd8d3c','#f03b20','#bd0026']
+
+def button_callback():
+    sys.exit()  # Stop the server
+
+button = Button(label="Stop", button_type="success")
+button.on_click(button_callback)
 
 log = logging.getLogger('bokeh')
 
@@ -139,13 +154,22 @@ def map_plot(source, year):
     # source2 = ColumnDataSource(CR_index2)
         # see how we specify the x and y columns as strings,
         # and how to declare as a source the ColumnDataSource:
+    # Magma256.reverse()
+    mapper = linear_cmap(field_name='ValueCount', palette=customCMap ,low=min(CR_index['ValueCount']) ,high=max(CR_index['ValueCount']))
+    # mapper = linear_cmap(field_name='ValueCount', palette=customCMap ,low=100 ,high=min(CR_index['ValueCount']))
 
 
     center = fig.circle(x="MercatorX", y="MercatorY",
             size="ValueCount",
-            fill_color="color", line_color="color",
-            fill_alpha=0.3 ,legend_group='label',
+            # fill_color="color", line_color="color",
+            line_color=mapper,color=mapper,
+            fill_alpha=0.3 ,
+            # legend_group='label',
             source=source)
+    color_bar = ColorBar(color_mapper=mapper['transform'], width=8)
+
+    fig.add_layout(color_bar, 'right')
+
     # center2 = fig2.circle(x="MercatorX", y="MercatorY",
     #         size="ValueCount",
     #         fill_color="color", line_color="color",
@@ -278,6 +302,6 @@ loc_select.on_change('value', update_plots)
 year_select.on_change('value', update_plots)
 map_source.selected.on_change("indices", my_tap_handler)
 
-controls = column(loc_select,year_select)
+controls = column(loc_select,year_select, button)
 
 curdoc().add_root(column(row(map_plot,controls),row(loc_plot, year_plot)))
