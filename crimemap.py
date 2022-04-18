@@ -7,7 +7,7 @@ import numpy as np
 from bokeh.plotting import figure
 from bokeh.tile_providers import get_provider, WIKIMEDIA, CARTODBPOSITRON, STAMEN_TERRAIN, STAMEN_TONER, ESRI_IMAGERY, OSM
 from bokeh.io import output_notebook, show, curdoc
-from bokeh.models import Select, ColumnDataSource, FactorRange, DataRange1d
+from bokeh.models import Select, ColumnDataSource, FactorRange, DataRange1d, Panel, Tabs, DataTable, TableColumn, DateFormatter, Div
 from bokeh.layouts import gridplot, column, row
 from bokeh.events import Tap
 from bokeh.models import ColorBar
@@ -22,6 +22,15 @@ import sys
 from bokeh.models.widgets import Button
 
 customCMap = ['#00BFFF','#1E90FF','#fecc5c','#fd8d3c','#f03b20','#bd0026']
+
+columns = [
+            TableColumn(field="Case Number", title="Case Number"),
+            TableColumn(field="Incident Location", title="Incident Location"),
+            TableColumn(field="Nature of Offense", title="Nature of Offense"),
+            TableColumn(field="Date Reported", title="Date Reported",formatter=DateFormatter()),
+            TableColumn(field="Time Occured", title="Time Occured"),
+            TableColumn(field="Disposition", title="Disposition"),
+        ]
 
 def button_callback():
     sys.exit()  # Stop the server
@@ -197,6 +206,8 @@ def get_loc_dataset(df, loc, year):
 
     df_now = df_by_loc[df_by_loc['Incident Location'] == loc].sort_values(by=['Case Number'],ascending=True)
 
+    df_now.reset_index(drop=True,inplace=True)
+
     return ColumnDataSource(data=df_now)
 
 
@@ -218,6 +229,24 @@ def get_year_dataset(df, year):
     df_now = df_by_cate_major
 
     return ColumnDataSource(data=df_now)
+
+def get_data_grid(df, loc, year):
+
+
+    if year != 'All years':
+
+        df_now = df[(df['Incident Location']==loc)&(df['Date Reported'].dt.year==int(year))][['Case Number','Nature of Offense','Date Reported','Disposition','Time Occured', 'Incident Location']]
+        
+    else:
+        df_now = df[df['Incident Location']==loc][['Case Number','Nature of Offense','Date Reported','Disposition','Time Occured','Incident Location']]
+        
+    df_now.reset_index(drop=True,inplace=True)
+
+    for i in range(len(df_now)):
+        my_str = df_now['Time Occured'][i]
+        df_now['Time Occured'][i] = ':'.join(my_str[i:i+2] for i in range(1, len(my_str), 2))
+
+    return df_now
 
 
 def make_loc_plot(source, loc):
@@ -245,6 +274,24 @@ def make_year_plot(source, year):
     return p
 
 
+def make_data_grid(source):
+    
+    source = ColumnDataSource(data=source)
+    
+    columns = [
+            TableColumn(field="Case Number", title="Case Number"),
+            TableColumn(field="Incident Location", title="Incident Location"),
+            TableColumn(field="Nature of Offense", title="Nature of Offense"),
+            TableColumn(field="Date Reported", title="Date Reported",formatter=DateFormatter()),
+            TableColumn(field="Time Occured", title="Time Occured"),
+            TableColumn(field="Disposition", title="Disposition"),
+        ]
+    
+    data_table = DataTable(source=source, columns=columns, width=1000, editable = True)
+
+    return data_table
+
+
 def update_plots(attrname, old, new):
     year = year_select.value
     loc = loc_select.value
@@ -265,7 +312,9 @@ def update_plots(attrname, old, new):
     map_source.data.update(src_map.data)
     map_plot.title.text = "UMN Crime Map in " + year
 
-
+    src_grid = get_data_grid(df_all, loc, year)
+    data_grid.source.data = src_grid
+    
 
 def my_tap_handler(attr, old, new):
     year = year_select.value
@@ -281,8 +330,12 @@ def my_tap_handler(attr, old, new):
         loc_plot.y_range.factors = loc_source.data['Nature of Offense'].tolist()
         loc_select.value = loc
 
+        src_grid = get_data_grid(df_all, loc, year)
+        data_grid.source.data = src_grid
 
-loc = '10 Church St Se, MN'
+
+
+loc = '100 CHURCH ST SE, MN'
 year = 'All years'
 
 locs = df_all['Incident Location'].unique().tolist()
@@ -297,11 +350,22 @@ loc_plot = make_loc_plot(loc_source, loc)
 year_plot = make_year_plot(year_source, year)
 map_source = calFreq(df_all, year)
 map_plot = map_plot(map_source, year)
+data_grid_source = get_data_grid(df_all, loc, year)
+data_grid = make_data_grid(data_grid_source)
 
 loc_select.on_change('value', update_plots)
 year_select.on_change('value', update_plots)
 map_source.selected.on_change("indices", my_tap_handler)
 
-controls = column(loc_select,year_select, button)
+controls = column(year_select, loc_select, button)
 
-curdoc().add_root(column(row(map_plot,controls),row(loc_plot, year_plot)))
+div1 = Div(text="<img src='https://github.com/VL914/random_demo/raw/master/Picture1.png'>")
+div2 = Div(text="<img src='https://github.com/VL914/random_demo/raw/master/Picture2.png'>", width = 400, height = 200)
+
+tab1 = Panel(child=column(row(map_plot,controls),row(loc_plot, year_plot)), title="Map")
+tab2 = Panel(child=data_grid, title="Data Grid")
+tab3 = Panel(child=div1, title="Analytics")
+tab4 = Panel(child=div2, title="About data")
+tabs = Tabs(tabs=[tab1, tab2, tab3, tab4])
+
+curdoc().add_root(tabs)
