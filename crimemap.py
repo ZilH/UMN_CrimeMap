@@ -7,7 +7,7 @@ import numpy as np
 from bokeh.plotting import figure
 from bokeh.tile_providers import get_provider, WIKIMEDIA, CARTODBPOSITRON, STAMEN_TERRAIN, STAMEN_TONER, ESRI_IMAGERY, OSM
 from bokeh.io import output_notebook, show, curdoc
-from bokeh.models import Select, ColumnDataSource, FactorRange, DataRange1d, Panel, Tabs, DataTable, TableColumn, DateFormatter, Div
+from bokeh.models import Select, ColumnDataSource, FactorRange, DataRange1d, Panel, Tabs, DataTable, TableColumn, DateFormatter, Div, LabelSet
 from bokeh.layouts import gridplot, column, row
 from bokeh.events import Tap
 from bokeh.models import ColorBar
@@ -21,6 +21,16 @@ from bokeh.palettes import Spectral6, RdBu6, Magma256
 import sys
 from bokeh.models.widgets import Button
 
+
+def button_callback():
+    sys.exit()  # Stop the server
+
+button = Button(label="Stop", button_type="success")
+button.on_click(button_callback)
+
+log = logging.getLogger('bokeh')
+
+
 customCMap = ['#00BFFF','#1E90FF','#fecc5c','#fd8d3c','#f03b20','#bd0026']
 
 columns = [
@@ -32,18 +42,13 @@ columns = [
             TableColumn(field="Disposition", title="Disposition"),
         ]
 
-def button_callback():
-    sys.exit()  # Stop the server
-
-button = Button(label="Stop", button_type="success")
-button.on_click(button_callback)
-
-log = logging.getLogger('bokeh')
-
 
 df_all = pd.read_pickle('2020_2021_cleaned_geocoded_all_Mercator')
 df_all['Incident Location'] = df_all['Incident Location'].str.upper()
 df_all.reset_index(drop=True,inplace=True)
+
+df_2020 = df_all[df_all['Date Reported'].dt.year == 2020]
+df_2021 = df_all[df_all['Date Reported'].dt.year == 2021]
 
 Upleft = [44.991509, -93.256765]
 Lowerright = [44.941402, -93.064918]
@@ -132,11 +137,11 @@ def map_plot(source, year):
 
     TOOLS = "pan,wheel_zoom,box_select,reset,tap"
 
-    plot_options = dict(width=1000, plot_height=800, tools=TOOLS , tooltips=TOOLTIPS,
+    plot_options = dict(width=1100, plot_height=600, tools=TOOLS , tooltips=TOOLTIPS,
 
                 x_axis_type="mercator", y_axis_type="mercator")
 
-    fig = figure(x_range=(world_lon1, world_lon2),y_range=(world_lat1, world_lat2),**plot_options)
+    fig = figure(x_range=(world_lon1, world_lon2),y_range=(world_lat1, world_lat2),**plot_options,margin=(0,30,30,0))
     fig.add_tile(cartodb)
     fig.title.text = "UMN Crime Map in " + year
     fig.title.align = "center"
@@ -179,6 +184,8 @@ def map_plot(source, year):
 
     fig.add_layout(color_bar, 'right')
 
+    fig.title.text_font_size = "20px"
+
     # center2 = fig2.circle(x="MercatorX", y="MercatorY",
     #         size="ValueCount",
     #         fill_color="color", line_color="color",
@@ -193,7 +200,6 @@ def map_plot(source, year):
     # markdown = pn.pane.Markdown("Some text")
 
     return fig
-
 
 
 def get_loc_dataset(df, loc, year):
@@ -219,19 +225,35 @@ def get_year_dataset(df, year):
 
         df_by_cate_major = df_by_cate[(df_by_cate['Case Number']>24)].sort_values(by=['Case Number'],ascending=True)
 
-    else:
+        df_now = {
+            'cr': df_by_cate_major['Nature of Offense'].tolist(),
+            '2020': [df_2020[df_2020['Nature of Offense']==i].shape[0] for i in df_by_cate_major['Nature of Offense']],
+            '2021': [df_2021[df_2021['Nature of Offense']==i].shape[0] for i in df_by_cate_major['Nature of Offense']]
+        }
+
+    elif year == '2020':
 
         df_by_cate = df[df['Date Reported'].dt.year == int(year)].groupby('Nature of Offense')['Case Number'].count().to_frame('Case Number').reset_index()
-
         df_by_cate_major = df_by_cate[(df_by_cate['Case Number']>24)].sort_values(by=['Case Number'],ascending=True)
+        df_now = {
+            'cr': df_by_cate_major['Nature of Offense'].tolist(),
+            '2020':  df_by_cate_major['Case Number'].tolist(),
+            '2021': [0] * len(df_by_cate_major)
+        }
+    
+    elif year == '2021':
 
-
-    df_now = df_by_cate_major
+        df_by_cate = df[df['Date Reported'].dt.year == int(year)].groupby('Nature of Offense')['Case Number'].count().to_frame('Case Number').reset_index()
+        df_by_cate_major = df_by_cate[(df_by_cate['Case Number']>24)].sort_values(by=['Case Number'],ascending=True)
+        df_now = {
+            'cr': df_by_cate_major['Nature of Offense'].tolist(),
+            '2021':  df_by_cate_major['Case Number'].tolist(),
+            '2020': [0] * len(df_by_cate_major)
+        }
 
     return ColumnDataSource(data=df_now)
 
 def get_data_grid(df, loc, year):
-
 
     if year != 'All years':
 
@@ -251,7 +273,7 @@ def get_data_grid(df, loc, year):
 
 def make_loc_plot(source, loc):
 
-    p = figure(x_axis_label='Counts', title = "Total Counts of Crimes at "+ loc, width = 500, height = 600,
+    p = figure(x_axis_label='Counts', title = "Total Counts of Crimes at "+ loc, width = 500, height = 600, 
                x_range=DataRange1d(range_padding=0.0), y_range=FactorRange(factors = source.data['Nature of Offense'].tolist()),tools='')
 
     p.hbar(source=source, y='Nature of Offense', right='Case Number', height =0.6, fill_color="dodgerblue"
@@ -259,6 +281,9 @@ def make_loc_plot(source, loc):
 
     # Turn off gridlines on categorical axis
     p.ygrid.grid_line_color = None
+    p.title.text_font_size = "15px"
+    p.title.vertical_align = 'top'
+    p.title.align = "center"
 
     return p
 
@@ -266,10 +291,20 @@ def make_loc_plot(source, loc):
 def make_year_plot(source, year):
 
     p = figure(x_axis_label='Counts', title = "Total Counts of Crimes in "+str(year), width = 500, height = 600,
-              x_range=DataRange1d(range_padding=0.0),y_range=FactorRange(factors = source.data['Nature of Offense'].tolist()), tools='')
+        x_range=DataRange1d(range_padding=0.0), y_range=source.data['cr'], tools='')
 
-    p.hbar(source=source, y='Nature of Offense', right='Case Number',height =0.6,  fill_color="red"
-      , line_color="red", fill_alpha=0.3)
+    years = ['2020','2021']
+
+    p.hbar_stack(years, y='cr', height=0.7, alpha=0.5, color=["blue", "red"], source=source,
+                legend_label=years)
+
+    # left_labels = LabelSet(x='2020', y='cr', text='2020', source=source, render_mode='canvas')
+    
+    p.legend.location = "center_right"
+    p.title.text_font_size = "15px"
+    p.ygrid.grid_line_color = None
+    p.title.align = "center"
+    # p.add_layout(left_labels)
 
     return p
 
@@ -306,7 +341,10 @@ def update_plots(attrname, old, new):
     year_source.data.update(src_year.data)
     year_plot.title.text = "Total Counts of Crimes in "+ year
     year_plot.x_range = DataRange1d(range_padding=0.0)
-    year_plot.y_range.factors =  year_source.data['Nature of Offense'].tolist()
+    # year_plot.y_range.factors =  year_source.data['Nature of Offense'].tolist()
+    year_plot.y_range.factors = year_source.data['cr']
+    # left_labels.source = src_year
+
 
     src_map = calFreq(df_all, year)
     map_source.data.update(src_map.data)
@@ -341,8 +379,9 @@ year = 'All years'
 locs = df_all['Incident Location'].unique().tolist()
 years = ['All years','2020','2021']
 
+year_select = Select(value=year, title='Year', options=sorted(years),margin=(40,0,20,0))
 loc_select = Select(value=loc, title='Location', options=sorted(locs))
-year_select = Select(value=year, title='Year', options=sorted(years))
+
 
 loc_source = get_loc_dataset(df_all, loc, year)
 year_source = get_year_dataset(df_all, year)
@@ -359,13 +398,12 @@ map_source.selected.on_change("indices", my_tap_handler)
 
 controls = column(year_select, loc_select, button)
 
-div1 = Div(text="<img src='https://github.com/VL914/random_demo/raw/master/Picture1.png'>")
+# div1 = Div(text="<img src='https://github.com/VL914/random_demo/raw/master/Picture1.png'>")
 div2 = Div(text="<img src='https://github.com/VL914/random_demo/raw/master/Picture2.png'>", width = 400, height = 200)
 
-tab1 = Panel(child=column(row(map_plot,controls),row(loc_plot, year_plot)), title="Map")
+tab1 = Panel(child=column(row(map_plot,controls),row(loc_plot, year_plot),height=2000), title="Map")
 tab2 = Panel(child=data_grid, title="Data Grid")
-tab3 = Panel(child=div1, title="Analytics")
-tab4 = Panel(child=div2, title="About data")
-tabs = Tabs(tabs=[tab1, tab2, tab3, tab4])
+tab3 = Panel(child=div2, title="About data")
+tabs = Tabs(tabs=[tab1, tab2, tab3])
 
 curdoc().add_root(tabs)
