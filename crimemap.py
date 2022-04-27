@@ -31,7 +31,8 @@ button.on_click(button_callback)
 log = logging.getLogger('bokeh')
 
 
-customCMap = ['#00BFFF','#1E90FF','#fecc5c','#fd8d3c','#f03b20','#bd0026']
+# customCMap = ['#00BFFF','#1E90FF','#fecc5c','#fd8d3c','#f03b20','#bd0026']
+customCMap = ['#A9A9A9','#FFF8DC','#fecc5c','#fd8d3c','#f03b20','#bd0026']
 
 columns = [
             TableColumn(field="Case Number", title="Case Number"),
@@ -240,7 +241,7 @@ def get_year_dataset(df, year):
             '2020':  df_by_cate_major['Case Number'].tolist(),
             '2021': [0] * len(df_by_cate_major)
         }
-    
+
     elif year == '2021':
 
         df_by_cate = df[df['Date Reported'].dt.year == int(year)].groupby('Nature of Offense')['Case Number'].count().to_frame('Case Number').reset_index()
@@ -258,10 +259,10 @@ def get_data_grid(df, loc, year):
     if year != 'All years':
 
         df_now = df[(df['Incident Location']==loc)&(df['Date Reported'].dt.year==int(year))][['Case Number','Nature of Offense','Date Reported','Disposition','Time Occured', 'Incident Location']]
-        
+
     else:
         df_now = df[df['Incident Location']==loc][['Case Number','Nature of Offense','Date Reported','Disposition','Time Occured','Incident Location']]
-        
+
     df_now.reset_index(drop=True,inplace=True)
 
     for i in range(len(df_now)):
@@ -273,7 +274,7 @@ def get_data_grid(df, loc, year):
 
 def make_loc_plot(source, loc):
 
-    p = figure(x_axis_label='Counts', title = "Total Counts of Crimes at "+ loc, width = 500, height = 600, 
+    p = figure(x_axis_label='Counts', title = "Total Counts of Crimes at "+ loc, width = 500, height = 600,
                x_range=DataRange1d(range_padding=0.0), y_range=FactorRange(factors = source.data['Nature of Offense'].tolist()),tools='')
 
     p.hbar(source=source, y='Nature of Offense', right='Case Number', height =0.6, fill_color="dodgerblue"
@@ -299,7 +300,7 @@ def make_year_plot(source, year):
                 legend_label=years)
 
     # left_labels = LabelSet(x='2020', y='cr', text='2020', source=source, render_mode='canvas')
-    
+
     p.legend.location = "center_right"
     p.title.text_font_size = "15px"
     p.ygrid.grid_line_color = None
@@ -310,9 +311,9 @@ def make_year_plot(source, year):
 
 
 def make_data_grid(source):
-    
+
     source = ColumnDataSource(data=source)
-    
+
     columns = [
             TableColumn(field="Case Number", title="Case Number"),
             TableColumn(field="Incident Location", title="Incident Location"),
@@ -321,7 +322,7 @@ def make_data_grid(source):
             TableColumn(field="Time Occured", title="Time Occured"),
             TableColumn(field="Disposition", title="Disposition"),
         ]
-    
+
     data_table = DataTable(source=source, columns=columns, width=1000, editable = True)
 
     return data_table
@@ -352,7 +353,7 @@ def update_plots(attrname, old, new):
 
     src_grid = get_data_grid(df_all, loc, year)
     data_grid.source.data = src_grid
-    
+
 
 def my_tap_handler(attr, old, new):
     year = year_select.value
